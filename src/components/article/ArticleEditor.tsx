@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import ArticleHeader from './ArticleHeader';
 import { useToast } from '@/hooks/use-toast';
+import { Textarea } from '@/components/ui/textarea';
 
 const ArticleEditor = () => {
   const [title, setTitle] = useState('');
@@ -17,14 +18,16 @@ const ArticleEditor = () => {
     
     toast({
       title: "Ссылка скопирована",
-      description: "Теперь вы можете поделиться статьей с соавторами."
+      description: "Теперь вы можете поделиться статьей с соавторами.",
+      className: "bg-accent-sage border-accent-sage"
     });
   };
 
   const handleSchedule = () => {
     toast({
       title: "Публикация запланирована",
-      description: "Статья будет опубликована в выбранную дату."
+      description: "Статья будет опубликована в выбранную дату.",
+      className: "bg-accent-sky border-accent-sky"
     });
   };
 
@@ -49,13 +52,14 @@ const ArticleEditor = () => {
 
     toast({
       title: "Статья опубликована!",
-      description: "Ваша статья успешно опубликована и теперь доступна читателям."
+      description: "Ваша статья успешно опубликована и теперь доступна читателям.",
+      className: "bg-accent-peach border-accent-peach"
     });
   };
 
   return (
     <div className="min-h-full flex flex-col">
-      <div className="bg-white p-6 border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-white p-6 border-b border-gray-100 sticky top-0 z-10 shadow-sm">
         <ArticleHeader
           onShare={handleShare}
           onSchedule={handleSchedule}
@@ -64,20 +68,22 @@ const ArticleEditor = () => {
       </div>
       
       <div className="flex-1 p-6 max-w-4xl mx-auto w-full">
-        <input
-          type="text"
-          placeholder="Заголовок статьи"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="w-full text-3xl font-bold border-0 border-b border-transparent focus:border-gray-200 focus:ring-0 px-0 py-2 mb-6 placeholder:text-gray-300"
-        />
-        
-        <textarea
-          placeholder="Начните писать свою историю..."
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          className="w-full min-h-[400px] border-0 focus:ring-0 px-0 py-2 placeholder:text-gray-300 resize-none text-lg"
-        />
+        <div className="bg-white rounded-2xl shadow-soft p-8 mb-6">
+          <input
+            type="text"
+            placeholder="Заголовок статьи"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full text-3xl font-serif font-bold border-0 border-b border-transparent focus:border-gray-200 focus:ring-0 px-0 py-2 mb-6 placeholder:text-gray-300"
+          />
+          
+          <Textarea
+            placeholder="Начните писать свою историю..."
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="w-full min-h-[400px] border-0 focus:ring-0 px-0 py-2 placeholder:text-gray-300 resize-none text-lg"
+          />
+        </div>
       </div>
     </div>
   );

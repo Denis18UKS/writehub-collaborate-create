@@ -6,7 +6,9 @@ import ArticleEditor from '@/components/article/ArticleEditor';
 const ArticleEdit = () => {
   return (
     <DashboardLayout>
-      <ArticleEditor />
+      <div className="bg-accent-cream/10 min-h-full rounded-xl animate-fade-in">
+        <ArticleEditor />
+      </div>
     </DashboardLayout>
   );
 };

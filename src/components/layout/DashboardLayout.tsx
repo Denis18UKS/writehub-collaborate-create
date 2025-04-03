@@ -26,35 +26,35 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-accent-cream/10 flex">
       {/* Sidebar for desktop */}
       <aside 
         className={`${
           isMobile
             ? `fixed inset-y-0 left-0 z-50 transform ${
                 isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-              } transition-transform duration-200 ease-in-out`
+              } transition-transform duration-300 ease-in-out`
             : 'sticky top-0 h-screen'
-        } w-64 bg-white border-r border-gray-200 flex flex-col`}
+        } w-64 bg-white border-r border-gray-100 shadow-sm flex flex-col`}
       >
-        <div className="p-4 border-b border-gray-200">
+        <div className="p-6 border-b border-gray-100">
           <Link to="/" className="flex items-center gap-2">
-            <span className="text-xl font-bold bg-gradient-to-r from-accent-purple to-accent-cream bg-clip-text text-transparent">
+            <span className="text-xl font-serif font-bold text-gradient">
               WriteHub
             </span>
           </Link>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-4 py-8 space-y-2 overflow-y-auto">
           {navItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg ${
+              className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 ${
                 location.pathname === item.path
-                  ? 'bg-gray-100 text-accent-purple'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-accent-purple'
-              } transition-colors`}
+                  ? 'bg-accent-purple/10 text-accent-purple shadow-sm'
+                  : 'text-gray-600 hover:bg-accent-cream/50 hover:text-accent-purple'
+              }`}
             >
               {React.cloneElement(item.icon, {
                 className: `mr-3 ${location.pathname === item.path ? 'text-accent-purple' : 'text-gray-400'}`
@@ -64,8 +64,8 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-gray-200">
-          <Button variant="outline" className="w-full justify-start" asChild>
+        <div className="p-4 m-4 border-t border-gray-100 rounded-lg bg-accent-cream/30">
+          <Button variant="outline" className="w-full justify-start rounded-lg bg-white hover:bg-accent-cream hover:text-accent-purple transition-colors duration-300" asChild>
             <Link to="/logout">
               <LogOut className="mr-2 h-4 w-4" />
               Выйти
@@ -77,7 +77,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       {/* Mobile overlay */}
       {isMobile && isSidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-gray-600 bg-opacity-50"
+          className="fixed inset-0 z-40 bg-gray-600 bg-opacity-50 backdrop-blur-sm"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
@@ -85,25 +85,25 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       {/* Main content */}
       <main className="flex-1 flex flex-col min-h-screen">
         {/* Top header */}
-        <header className="bg-white border-b border-gray-200 py-4 px-6 flex items-center justify-between">
+        <header className="bg-white border-b border-gray-100 py-4 px-6 flex items-center justify-between shadow-sm">
           <div className="flex items-center">
             {isMobile && (
-              <Button variant="ghost" size="sm" onClick={toggleSidebar} className="mr-4">
+              <Button variant="ghost" size="sm" onClick={toggleSidebar} className="mr-4 hover:bg-accent-cream/50">
                 <AlignJustify className="h-5 w-5" />
               </Button>
             )}
-            <h1 className="text-lg font-semibold text-gray-800">
+            <h1 className="text-lg font-medium text-gray-800">
               {navItems.find((item) => item.path === location.pathname)?.label || 'Панель управления'}
             </h1>
           </div>
 
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" className="relative">
+            <Button variant="ghost" size="sm" className="relative hover:bg-accent-cream/50 rounded-full w-9 h-9 p-0">
               <Bell className="h-5 w-5" />
-              <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-accent-purple"></span>
+              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-accent-purple"></span>
             </Button>
-            <div className="h-8 w-8 rounded-full bg-accent-purple/20 flex items-center justify-center">
-              <span className="text-sm font-medium text-accent-purple">ИП</span>
+            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-accent-purple to-accent-sage flex items-center justify-center shadow-sm">
+              <span className="text-sm font-medium text-white">ИП</span>
             </div>
           </div>
         </header>

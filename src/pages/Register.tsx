@@ -7,12 +7,12 @@ import AuthLayout from '@/components/layout/AuthLayout';
 const Register = () => {
   return (
     <AuthLayout 
-      title="Создайте аккаунт" 
-      description="Присоединяйтесь к сообществу авторов"
+      title="Присоединяйтесь к нам"
+      description="Создайте аккаунт и станьте частью сообщества авторов"
       footer={
         <p className="text-center text-gray-600">
           Уже есть аккаунт?{' '}
-          <Link to="/login" className="text-accent-purple hover:underline">
+          <Link to="/login" className="text-accent-purple hover:text-accent-purple/80 font-medium hover:underline transition-colors">
             Войти
           </Link>
         </p>
