@@ -157,17 +157,17 @@ app.post('/api/articles', async (req, res) => {
 });
 
 // 🔹 Получение всех статей
-app.get('/api/articles', async (req, res) => {
-  try {
-    const connection = await pool.getConnection();
-    const [articles] = await connection.execute('SELECT * FROM articles');
-    connection.release();
-    return res.json(articles);
-  } catch (err) {
-    console.error('❌ Ошибка при получении статей:', err);
-    return res.status(500).json({ message: 'Ошибка сервера', error: err.message });
-  }
-});
+  app.get('/api/articles', async (req, res) => {
+    try {
+      const connection = await pool.getConnection();
+      const [articles] = await connection.execute('SELECT * FROM articles');
+      connection.release();
+      return res.json(articles);
+    } catch (err) {
+      console.error('❌ Ошибка при получении статей:', err);
+      return res.status(500).json({ message: 'Ошибка сервера', error: err.message });
+    }
+  });
 
 // 🔹 Получение статьи по ID
 app.get('/api/articles/:id', async (req, res) => {
@@ -379,9 +379,9 @@ app.post('/api/articles/:id/share', async (req, res) => {
     // Формируем URL для клиента
     let shareUrl;
     if (permission_level === 'edit') {
-      shareUrl = `http://localhost:3000/edit/${id}?share=${shareId}`;
+      shareUrl = `http://localhost:8080/edit/${id}?share=${shareId}`;
     } else {
-      shareUrl = `http://localhost:3000/view/${id}?share=${shareId}`;
+      shareUrl = `http://localhost:8080/view/${id}?share=${shareId}`;
     }
     
     return res.status(201).json({ 
