@@ -1,10 +1,12 @@
-
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowUp, ArrowDown, FileText, MessageSquare, Eye } from 'lucide-react';
 
 const Dashboard = () => {
+  const navigate = useNavigate(); // Для переходов по страницам
+
   // Mock data
   const stats = [
     { title: 'Всего статей', value: '12', change: '+2', up: true },
@@ -23,7 +25,7 @@ const Dashboard = () => {
     <DashboardLayout>
       <div className="grid gap-6">
         <h1 className="text-3xl font-bold">Добро пожаловать!</h1>
-        
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map((stat, index) => (
@@ -51,7 +53,11 @@ const Dashboard = () => {
           <CardContent>
             <div className="space-y-6">
               {recentArticles.map((article) => (
-                <div key={article.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-gray-50 rounded-lg">
+                <div
+                  key={article.id}
+                  className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition"
+                  onClick={() => navigate(`/dashboard/articles/${article.id}`)} // Клик по статье ведет на её страницу
+                >
                   <div>
                     <h3 className="font-semibold">{article.title}</h3>
                     <p className="text-sm text-gray-500">{article.date}</p>
@@ -79,24 +85,35 @@ const Dashboard = () => {
             <CardDescription>Часто используемые инструменты</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="cursor-pointer hover:bg-gray-50 transition-colors">
+            {/* Создать статью */}
+            <Card
+              className="cursor-pointer hover:bg-gray-50 transition-colors"
+              onClick={() => navigate('/dashboard/articles/new')}
+            >
               <CardContent className="flex flex-col items-center justify-center py-6">
                 <FileText className="h-12 w-12 text-accent-purple mb-4" />
                 <p className="font-semibold">Создать статью</p>
               </CardContent>
             </Card>
-            <Card className="cursor-pointer hover:bg-gray-50 transition-colors">
+
+            {/* Предложить идею */}
+            <Card
+              className="cursor-pointer hover:bg-gray-50 transition-colors"
+              onClick={() => navigate('/dashboard/ideas')}
+            >
               <CardContent className="flex flex-col items-center justify-center py-6">
                 <MessageSquare className="h-12 w-12 text-accent-purple mb-4" />
                 <p className="font-semibold">Предложить идею</p>
               </CardContent>
             </Card>
-            <Card className="cursor-pointer hover:bg-gray-50 transition-colors">
+
+            {/* Просмотреть статистику */}
+            <Card
+              className="cursor-pointer hover:bg-gray-50 transition-colors"
+              onClick={() => navigate('/dashboard/stats')}
+            >
               <CardContent className="flex flex-col items-center justify-center py-6">
-                <svg className="h-12 w-12 text-accent-purple mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
+                <Eye className="h-12 w-12 text-accent-purple mb-4" />
                 <p className="font-semibold">Просмотреть статистику</p>
               </CardContent>
             </Card>
