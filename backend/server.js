@@ -157,17 +157,17 @@ app.post('/api/articles', async (req, res) => {
 });
 
 // 🔹 Получение всех статей
-  app.get('/api/articles', async (req, res) => {
-    try {
-      const connection = await pool.getConnection();
-      const [articles] = await connection.execute('SELECT * FROM articles');
-      connection.release();
-      return res.json(articles);
-    } catch (err) {
-      console.error('❌ Ошибка при получении статей:', err);
-      return res.status(500).json({ message: 'Ошибка сервера', error: err.message });
-    }
-  });
+app.get('/api/articles', async (req, res) => {
+  try {
+    const connection = await pool.getConnection();
+    const [articles] = await connection.execute('SELECT * FROM articles');
+    connection.release();
+    return res.json(articles);
+  } catch (err) {
+    console.error('❌ Ошибка при получении статей:', err);
+    return res.status(500).json({ message: 'Ошибка сервера', error: err.message });
+  }
+});
 
 // 🔹 Получение статьи по ID
 app.get('/api/articles/:id', async (req, res) => {
@@ -198,12 +198,12 @@ app.get('/api/articles/:id', async (req, res) => {
 async function publishScheduledArticles() {
   try {
     const connection = await pool.getConnection();
-    
+
     // Получаем список статей, запланированных на текущий момент или ранее
     const [articles] = await connection.execute(
       'SELECT id FROM articles WHERE status = "scheduled" AND scheduled_publish_time <= NOW()'
     );
-    
+
     // Публикуем каждую статью
     for (const article of articles) {
       await connection.execute(
@@ -212,7 +212,7 @@ async function publishScheduledArticles() {
       );
       console.log(`🗓️ Опубликована запланированная статья с ID: ${article.id}`);
     }
-    
+
     connection.release();
   } catch (err) {
     console.error('❌ Ошибка при публикации запланированных статей:', err);
@@ -221,6 +221,7 @@ async function publishScheduledArticles() {
 
 // Проверяем и публикуем запланированные статьи каждую минуту
 setInterval(publishScheduledArticles, 60000);
+
 // 🔹 Обновление статьи
 app.put('/api/articles/:id', async (req, res) => {
   const { id } = req.params;
@@ -325,57 +326,57 @@ const { v4: uuidv4 } = require('uuid'); // Добавьте эту зависи�
 app.post('/api/articles/:id/share', async (req, res) => {
   const { id } = req.params;
   const { permission_level = 'edit', expires_days = 7 } = req.body; // По умолчанию - права на редактирование и 7 дней
-  
+
   // Проверяем авторизацию и получаем ID пользователя из токена
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ message: 'Требуется авторизация' });
   }
-  
+
   const token = authHeader.split(' ')[1];
   let userId;
-  
+
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     userId = decoded.userId;
   } catch (err) {
     return res.status(401).json({ message: 'Неверный токен' });
   }
-  
+
   try {
     const connection = await pool.getConnection();
-    
+
     // Проверяем существование статьи
     const [article] = await connection.execute('SELECT * FROM articles WHERE id = ?', [id]);
     if (article.length === 0) {
       connection.release();
       return res.status(404).json({ message: 'Статья не найдена' });
     }
-    
+
     // Проверяем, что пользователь является владельцем статьи
     if (article[0].owner_id !== userId) {
       connection.release();
       return res.status(403).json({ message: 'У вас нет прав для создания ссылки' });
     }
-    
+
     // Генерируем уникальный ID для ссылки
     const shareId = uuidv4();
-    
+
     // Определяем дату истечения ссылки
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expires_days);
-    
+
     // Форматируем дату для MySQL
     const formattedExpiresAt = expiresAt.toISOString().slice(0, 19).replace('T', ' ');
-    
+
     // Сохраняем ссылку в базу данных с учетом вашей структуры таблицы
     await connection.execute(
       'INSERT INTO share_links (id, article_id, created_by, permission_level, expires_at) VALUES (?, ?, ?, ?, ?)',
       [shareId, id, userId, permission_level, formattedExpiresAt]
     );
-    
+
     connection.release();
-    
+
     // Формируем URL для клиента
     let shareUrl;
     if (permission_level === 'edit') {
@@ -383,9 +384,9 @@ app.post('/api/articles/:id/share', async (req, res) => {
     } else {
       shareUrl = `http://localhost:8080/view/${id}?share=${shareId}`;
     }
-    
-    return res.status(201).json({ 
-      shareId, 
+
+    return res.status(201).json({
+      shareId,
       shareUrl,
       expiresAt: expiresAt,
       permission_level
@@ -399,29 +400,29 @@ app.post('/api/articles/:id/share', async (req, res) => {
 // 🔗 Проверка действительности ссылки для доступа и получение данных статьи
 app.get('/api/articles/share/:shareId', async (req, res) => {
   const { shareId } = req.params;
-  
+
   try {
     const connection = await pool.getConnection();
-    
+
     // Проверяем существование и действительность ссылки
     const [shareLink] = await connection.execute(
       'SELECT s.*, a.title, a.content, a.owner_id FROM share_links s JOIN articles a ON s.article_id = a.id WHERE s.id = ? AND (s.expires_at IS NULL OR s.expires_at > NOW())',
       [shareId]
     );
-    
+
     if (shareLink.length === 0) {
       connection.release();
       return res.status(404).json({ message: 'Ссылка недействительна или просрочена' });
     }
-    
+
     // Получаем теги статьи
     const [tags] = await connection.execute(
       'SELECT t.id, t.name FROM tags t JOIN article_tags at ON t.id = at.tag_id WHERE at.article_id = ?',
       [shareLink[0].article_id]
     );
-    
+
     connection.release();
-    
+
     // Возвращаем данные в зависимости от уровня доступа
     const articleData = {
       id: shareLink[0].article_id,
@@ -432,8 +433,8 @@ app.get('/api/articles/share/:shareId', async (req, res) => {
       permission_level: shareLink[0].permission_level,
       expires_at: shareLink[0].expires_at
     };
-    
-    return res.status(200).json({ 
+
+    return res.status(200).json({
       valid: true,
       article: articleData
     });
@@ -450,43 +451,43 @@ app.put('/api/articles/:id/shared/:shareId', async (req, res) => {
 
   try {
     const connection = await pool.getConnection();
-    
+
     // Проверяем действительность ссылки и права на редактирование
     const [shareLink] = await connection.execute(
       'SELECT * FROM share_links WHERE id = ? AND article_id = ? AND permission_level = "edit" AND (expires_at IS NULL OR expires_at > NOW())',
       [shareId, id]
     );
-    
+
     if (shareLink.length === 0) {
       connection.release();
       return res.status(403).json({ message: 'Нет прав на редактирование или срок действия ссылки истек' });
     }
-    
+
     // Проверяем существование статьи
     const [article] = await connection.execute('SELECT * FROM articles WHERE id = ?', [id]);
-    
+
     if (article.length === 0) {
       connection.release();
       return res.status(404).json({ message: 'Статья не найдена' });
     }
-    
+
     // Обновляем статью
     await connection.execute(
       'UPDATE articles SET title = ?, content = ?, updated_at = NOW() WHERE id = ?',
       [title, content, id]
     );
-    
+
     // Увеличиваем номер версии статьи
     const [versionResult] = await connection.execute('SELECT MAX(version_number) as max_version FROM article_versions WHERE article_id = ?', [id]);
     const currentVersion = versionResult[0].max_version || 0;
     const newVersionNumber = currentVersion + 1;
-    
+
     // Сохраняем новую версию
     await connection.execute(
       'INSERT INTO article_versions (article_id, content, modified_by, version_number) VALUES (?, ?, ?, ?)',
       [id, content, shareLink[0].created_by, newVersionNumber]
     );
-    
+
     // Обновляем теги статьи
     await connection.execute('DELETE FROM article_tags WHERE article_id = ?', [id]);
     if (tags.length > 0) {
@@ -495,7 +496,7 @@ app.put('/api/articles/:id/shared/:shareId', async (req, res) => {
       );
       await Promise.all(tagPromises);
     }
-    
+
     connection.release();
     return res.status(200).json({ message: 'Статья успешно обновлена' });
   } catch (err) {

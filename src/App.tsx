@@ -13,6 +13,7 @@ import ArticleEdit from "./pages/ArticleEdit";
 import Profile from "./pages/Profile";
 import Ideas from "./pages/Ideas";
 import NotFound from "./pages/NotFound";
+import EditArticle from './pages/EditArticle';
 
 const queryClient = new QueryClient();
 
@@ -28,8 +29,9 @@ const App = () => (
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/dashboard/articles" element={<Articles />} />
-          <Route path="/dashboard/articles/:id/edit" element={<ArticleEdit />} />
+          <Route path="/dashboard/articles/:id/create" element={<ArticleEdit />} />
           <Route path="/dashboard/articles/new" element={<ArticleEdit />} />
+          <Route path="/dashboard/articles/:id/edit" element={<EditArticle />} />
           <Route path="/dashboard/profile" element={<Profile />} />
           <Route path="/dashboard/ideas" element={<Ideas />} />
           <Route path="*" element={<NotFound />} />
