@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import ArticleHeader from '../components/article/ArticleHeader.tsx';
 import { useToast } from '@/hooks/use-toast';
+import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Textarea } from '@/components/ui/textarea';
 import axios from 'axios';
 
@@ -106,6 +107,7 @@ const EditArticle = () => {
   };
 
   return (
+    <DashboardLayout>
     <div className="min-h-full flex flex-col">
       <div className="bg-white p-6 border-b border-gray-100 sticky top-0 z-10 shadow-sm">
         <ArticleHeader onPublish={handlePublish} title={title} />
@@ -179,6 +181,7 @@ const EditArticle = () => {
         </div>
       </div>
     </div>
+    </DashboardLayout>
   );
 };
 

@@ -323,11 +323,11 @@ app.get('/api/tags', async (req, res) => {
 const { v4: uuidv4 } = require('uuid'); // Добавьте эту зависимость: npm install uuid
 
 // 🔗 Создание ссылки для доступа к статье
+// Создание ссылки для доступа к статье
 app.post('/api/articles/:id/share', async (req, res) => {
   const { id } = req.params;
   const { permission_level = 'edit', expires_days = 7 } = req.body; // По умолчанию - права на редактирование и 7 дней
 
-  // Проверяем авторизацию и получаем ID пользователя из токена
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ message: 'Требуется авторизация' });
@@ -359,17 +359,14 @@ app.post('/api/articles/:id/share', async (req, res) => {
       return res.status(403).json({ message: 'У вас нет прав для создания ссылки' });
     }
 
-    // Генерируем уникальный ID для ссылки
+    // Генерация уникальной ссылки
     const shareId = uuidv4();
 
-    // Определяем дату истечения ссылки
+    // Расчет даты истечения ссылки
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expires_days);
-
-    // Форматируем дату для MySQL
     const formattedExpiresAt = expiresAt.toISOString().slice(0, 19).replace('T', ' ');
 
-    // Сохраняем ссылку в базу данных с учетом вашей структуры таблицы
     await connection.execute(
       'INSERT INTO share_links (id, article_id, created_by, permission_level, expires_at) VALUES (?, ?, ?, ?, ?)',
       [shareId, id, userId, permission_level, formattedExpiresAt]
@@ -377,7 +374,6 @@ app.post('/api/articles/:id/share', async (req, res) => {
 
     connection.release();
 
-    // Формируем URL для клиента
     let shareUrl;
     if (permission_level === 'edit') {
       shareUrl = `http://localhost:8080/edit/${id}?share=${shareId}`;
@@ -388,7 +384,7 @@ app.post('/api/articles/:id/share', async (req, res) => {
     return res.status(201).json({
       shareId,
       shareUrl,
-      expiresAt: expiresAt,
+      expiresAt,
       permission_level
     });
   } catch (err) {
@@ -396,6 +392,7 @@ app.post('/api/articles/:id/share', async (req, res) => {
     return res.status(500).json({ message: 'Ошибка сервера', error: err.message });
   }
 });
+
 
 // 🔗 Проверка действительности ссылки для доступа и получение данных статьи
 app.get('/api/articles/share/:shareId', async (req, res) => {
