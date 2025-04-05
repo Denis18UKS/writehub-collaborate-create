@@ -7,9 +7,41 @@ const bcrypt = require('bcrypt');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');  // Для генерации JWT токена
 
+
+
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const http = require('http');
+const { Server } = require('socket.io');
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: 'http://localhost:8080', // порт фронтенда
+    methods: ['GET', 'POST']
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('Пользователь подключен');
+
+  socket.on('joinRoom', (roomId) => {
+    socket.join(roomId);
+  });
+
+  socket.on('sendMessage', ({ message, room }) => {
+    io.to(room).emit('receiveMessage', message);
+  });
+
+  socket.on('leaveRoom', (roomId) => {
+    socket.leave(roomId);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Пользователь отключен');
+  });
+});
 
 // === 🔌 Подключение к MySQL ===
 const pool = mysql.createPool({
@@ -504,6 +536,6 @@ app.put('/api/articles/:id/shared/:shareId', async (req, res) => {
 
 // === 🚀 Запуск сервера ===
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Сервер запущен на порту ${PORT}`);
+server.listen(5000, () => {
+  console.log('🚀 Сервер запущен на http://localhost:5000');
 });
