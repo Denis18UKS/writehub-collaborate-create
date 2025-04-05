@@ -38,7 +38,8 @@ const Login = () => {
       });
 
       if (response.status === 200) {
-        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('token', response.data.token); // сохраняем токен
+        localStorage.setItem('user_id', response.data.user_id); // сохраняем user_id
         navigate('/dashboard');
       }
     } catch (err) {
