@@ -7,7 +7,21 @@ const bcrypt = require('bcrypt');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');  // Для генерации JWT токена
 
+const path = require('path'); // если ещё не добавлено
+const multer = require('multer');
 
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, 'uploads'));
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const extension = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + extension);
+  }
+});
+
+const upload = multer({ storage: storage });
 
 const app = express();
 app.use(cors());
@@ -54,7 +68,9 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
+
 // === Роуты для регистрации и логина ===
+
 
 // Роут для регистрации
 app.post('/api/auth/register', async (req, res) => {
@@ -130,7 +146,82 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// === 📝 Роуты для статей ===
+// === Редактирование профиля ===
+const authenticate = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Нет токена' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded; // userId из токена
+    next();
+  } catch (err) {
+    return res.status(403).json({ message: 'Недействительный токен' });
+  }
+};
+
+
+app.get('/api/profile', authenticate, async (req, res) => {
+  try {
+    const connection = await pool.getConnection();
+    const [user] = await connection.execute(
+      'SELECT username, email, full_name, bio, profile_image, vk_id, telegram_id FROM users WHERE id = ?',
+      [req.user.userId]
+    );
+    connection.release();
+
+    if (user.length === 0) {
+      return res.status(404).json({ message: 'Пользователь не найден' });
+    }
+
+    res.json(user[0]);
+  } catch (err) {
+    console.error('❌ Ошибка при получении профиля:', err);
+    res.status(500).json({ message: 'Ошибка сервера' });
+  }
+});
+
+app.put('/api/profile', authenticate, async (req, res) => {
+  const { full_name, email, bio, website } = req.body;
+
+  try {
+    const connection = await pool.getConnection();
+    await connection.execute(
+      'UPDATE users SET full_name = ?, email = ?, bio = ?, profile_image = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [full_name, email, bio, website, req.user.userId]
+    );
+    connection.release();
+
+    res.json({ message: 'Профиль успешно обновлён' });
+  } catch (err) {
+    console.error('Ошибка при обновлении профиля:', err);
+    res.status(500).json({ message: 'Ошибка сервера' });
+  }
+});
+
+
+app.post('/api/profile/avatar', authenticate, upload.single('avatar'), async (req, res) => {
+  const imagePath = `/uploads/${req.file.filename}`;
+
+  try {
+    const connection = await pool.getConnection();
+    await connection.execute(
+      'UPDATE users SET profile_image = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [imagePath, req.user.userId]
+    );
+    connection.release();
+
+    res.json({ imageUrl: imagePath });
+  } catch (err) {
+    console.error('Ошибка загрузки аватарки:', err);
+    res.status(500).json({ message: 'Ошибка сервера' });
+  }
+});
+
+// === Роуты для статей ===
 
 // 🔹 Создание статьи с поддержкой запланированной публикации
 app.post('/api/articles', async (req, res) => {
@@ -279,7 +370,6 @@ app.put('/api/articles/:id', async (req, res) => {
       [title, content, excerpt, cover_image, status, formattedDate, id]
     );
 
-    // Обновление версий статьи
     // Обновление версий статьи
     const [article] = await connection.execute('SELECT * FROM articles WHERE id = ?', [id]);
     if (article.length > 0) {
