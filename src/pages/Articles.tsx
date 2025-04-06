@@ -22,10 +22,12 @@ const Articles = () => {
 
   useEffect(() => {
     const fetchArticles = async () => {
+      const ownerId = localStorage.getItem('user_id');
+      if (!ownerId) return;
+
       try {
-        const res = await fetch('http://localhost:5000/api/articles');
+        const res = await fetch(`http://localhost:5000/api/articles?ownerId=${ownerId}`);
         const data = await res.json();
-        // Преобразуем поля из snake_case в camelCase
         const formatted = data.map((a: any) => ({
           id: a.id,
           title: a.title,
@@ -37,7 +39,7 @@ const Articles = () => {
             year: 'numeric'
           }),
           status: a.status,
-          collaborators: 0, // заглушка
+          collaborators: 0,
         }));
         setArticles(formatted);
       } catch (err) {
@@ -49,6 +51,7 @@ const Articles = () => {
 
     fetchArticles();
   }, []);
+
 
   const filterArticles = (status: string) => {
     if (status === 'all') return articles;

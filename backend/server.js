@@ -6,8 +6,9 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');  // Для генерации JWT токена
+const { v4: uuidv4 } = require('uuid');
 
-const path = require('path'); // если ещё не добавлено
+const path = require('path');
 const multer = require('multer');
 
 const storage = multer.diskStorage({
@@ -37,26 +38,6 @@ const io = new Server(server, {
   }
 });
 
-io.on('connection', (socket) => {
-  console.log('Пользователь подключен');
-
-  socket.on('joinRoom', (roomId) => {
-    socket.join(roomId);
-  });
-
-  socket.on('sendMessage', ({ message, room }) => {
-    io.to(room).emit('receiveMessage', message);
-  });
-
-  socket.on('leaveRoom', (roomId) => {
-    socket.leave(roomId);
-  });
-
-  socket.on('disconnect', () => {
-    console.log('Пользователь отключен');
-  });
-});
-
 // === 🔌 Подключение к MySQL ===
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
@@ -68,85 +49,79 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
+// === Хранилище документов и курсоров ===
+const documents = {}; // Хранение документов
+const cursors = {}; // Хранение курсоров пользователей
 
-// === Роуты для регистрации и логина ===
+// === Socket.io обработчики ===
+io.on("connection", (socket) => {
+  console.log("A user connected:", socket.id);
 
-
-// Роут для регистрации
-app.post('/api/auth/register', async (req, res) => {
-  const { username, email, password } = req.body;
-
-  if (!username || !email || !password) {
-    return res.status(400).json({ message: 'Все поля обязательны' });
-  }
-
-  try {
-    const connection = await pool.getConnection();
-
-    // Проверка на существующего пользователя
-    const [existingUser] = await connection.execute('SELECT * FROM users WHERE email = ?', [email]);
-    if (existingUser.length > 0) {
-      connection.release();
-      return res.status(400).json({ message: 'Пользователь с таким email уже существует' });
+  socket.on("joinDocument", (docId) => {
+    socket.join(docId);
+    if (documents[docId]) {
+      socket.emit("updateContent", documents[docId]);
     }
+  });
 
-    // Хеширование пароля
-    const hashedPassword = await bcrypt.hash(password, 10);
+  socket.on("editContent", ({ id, content }) => {
+    documents[id] = content;
+    socket.to(id).emit("updateContent", content);
+  });
 
-    // Вставка нового пользователя
-    await connection.execute(
-      'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
-      [username, email, hashedPassword]
-    );
+  socket.on("moveCursor", (cursorData) => {
+    cursors[socket.id] = cursorData;
+    // Отправляем всем другим пользователям обновленные данные курсора
+    socket.to(cursorData.id).emit("updateCursor", cursorData);
+  });
 
-    connection.release();
-    return res.status(201).json({ message: 'Регистрация успешна' });
+  socket.on('sendMessage', async ({ message, articleId, senderId }) => {
+    try {
+      const connection = await pool.getConnection();
 
-  } catch (err) {
-    console.error('❌ Ошибка при регистрации:', err);
-    return res.status(500).json({ message: 'Ошибка сервера', error: err.message });
-  }
+      // Проверяем, существует ли пользователь с данным senderId
+      const [user] = await connection.execute('SELECT id FROM users WHERE id = ?', [senderId]);
+      if (user.length === 0) {
+        connection.release();
+        console.error(`❌ Пользователь с id ${senderId} не найден`);
+        return;
+      }
+
+      // Сохраняем сообщение в БД (таблица team_chat_messages должна быть создана)
+      await connection.execute(
+        'INSERT INTO team_chat_messages (article_id, sender_id, message) VALUES (?, ?, ?)',
+        [articleId, senderId, message]
+      );
+
+      connection.release();
+
+      // Рассылаем сообщение участникам комнаты
+      io.to(`article_${articleId}`).emit("receiveMessage", {
+        message,
+        senderId,
+        articleId,
+        createdAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error("❌ Ошибка при сохранении сообщения:", err);
+    }
+  });
+
+  socket.on('joinRoom', (roomId) => {
+    socket.join(roomId);
+  });
+
+  socket.on('leaveRoom', (roomId) => {
+    socket.leave(roomId);
+  });
+
+  socket.on("disconnect", () => {
+    delete cursors[socket.id];
+    console.log("User disconnected:", socket.id);
+  });
 });
 
-// Роут для логина
-app.post('/api/auth/login', async (req, res) => {
-  const { login, password } = req.body; // теперь принимаем login
-
-  if (!login || !password) {
-    return res.status(400).json({ message: 'Все поля обязательны' });
-  }
-
-  try {
-    const connection = await pool.getConnection();
-
-    // Проверка, существует ли пользователь с таким email или username
-    const [user] = await connection.execute('SELECT * FROM users WHERE email = ? OR username = ?', [login, login]);
-    if (user.length === 0) {
-      connection.release();
-      return res.status(400).json({ message: 'Пользователь не найден' });
-    }
-
-    // Сравнение пароля с хешированным
-    const isPasswordValid = await bcrypt.compare(password, user[0].password);
-    if (!isPasswordValid) {
-      connection.release();
-      return res.status(400).json({ message: 'Неверный пароль' });
-    }
-
-    connection.release();
-
-    // Генерация JWT токена
-    const token = jwt.sign({ userId: user[0].id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-    return res.json({ message: 'Авторизация успешна', token });
-
-  } catch (err) {
-    console.error('❌ Ошибка при авторизации:', err);
-    return res.status(500).json({ message: 'Ошибка сервера', error: err.message });
-  }
-});
-
-// === Редактирование профиля ===
+// === Аутентификация пользователей ===
 const authenticate = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -163,7 +138,103 @@ const authenticate = (req, res, next) => {
   }
 };
 
+// === API роуты ===
 
+// --- Сообщения ---
+// Получение всех сообщений
+app.get("/api/messages", async (req, res) => {
+  const { articleId } = req.query;
+  try {
+    const [messages] = await pool.query(
+      `SELECT m.*, u.username 
+       FROM team_chat_messages m
+       JOIN users u ON m.sender_id = u.id
+       WHERE m.article_id = ?
+       ORDER BY m.created_at ASC`,
+      [articleId]
+    );
+    res.json(messages);
+  } catch (error) {
+    console.error("Ошибка при получении сообщений:", error);
+    res.status(500).json({ message: "Ошибка сервера" });
+  }
+});
+
+// Отправка нового сообщения
+app.post("/api/messages", async (req, res) => {
+  const { author, text } = req.body;
+
+  try {
+    const [result] = await pool.query(
+      "INSERT INTO messages (author, text) VALUES (?, ?)",
+      [author, text]
+    );
+
+    const newMessage = { id: result.insertId, author, text, created_at: new Date() };
+    io.emit("receive-message", newMessage); // Отправка сообщения всем подключенным клиентам
+
+    res.status(201).json(newMessage);
+  } catch (error) {
+    console.error("Ошибка при отправке сообщения:", error);
+    res.status(500).json({ message: "Ошибка сервера" });
+  }
+});
+
+// --- Аутентификация ---
+// Роут для регистрации
+app.post('/api/auth/register', async (req, res) => {
+  const { username, email, password } = req.body;
+  if (!username || !email || !password) {
+    return res.status(400).json({ message: 'Все поля обязательны' });
+  }
+  try {
+    const connection = await pool.getConnection();
+    const [existingUser] = await connection.execute('SELECT * FROM users WHERE email = ?', [email]);
+    if (existingUser.length > 0) {
+      connection.release();
+      return res.status(400).json({ message: 'Пользователь с таким email уже существует' });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await connection.execute(
+      'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
+      [username, email, hashedPassword]
+    );
+    connection.release();
+    return res.status(201).json({ message: 'Регистрация успешна' });
+  } catch (err) {
+    console.error('❌ Ошибка при регистрации:', err);
+    return res.status(500).json({ message: 'Ошибка сервера', error: err.message });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const { login, password } = req.body; // login может быть email или username
+  if (!login || !password) {
+    return res.status(400).json({ message: 'Все поля обязательны' });
+  }
+  try {
+    const connection = await pool.getConnection();
+    const [user] = await connection.execute('SELECT * FROM users WHERE email = ? OR username = ?', [login, login]);
+    if (user.length === 0) {
+      connection.release();
+      return res.status(400).json({ message: 'Пользователь не найден' });
+    }
+    const isPasswordValid = await bcrypt.compare(password, user[0].password);
+    if (!isPasswordValid) {
+      connection.release();
+      return res.status(400).json({ message: 'Неверный пароль' });
+    }
+    connection.release();
+    // Генерация JWT-токена с userId
+    const token = jwt.sign({ userId: user[0].id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    return res.json({ message: 'Авторизация успешна', token, user_id: user[0].id });
+  } catch (err) {
+    console.error('❌ Ошибка при авторизации:', err);
+    return res.status(500).json({ message: 'Ошибка сервера', error: err.message });
+  }
+});
+
+// --- Профиль пользователя ---
 app.get('/api/profile', authenticate, async (req, res) => {
   try {
     const connection = await pool.getConnection();
@@ -172,11 +243,7 @@ app.get('/api/profile', authenticate, async (req, res) => {
       [req.user.userId]
     );
     connection.release();
-
-    if (user.length === 0) {
-      return res.status(404).json({ message: 'Пользователь не найден' });
-    }
-
+    if (user.length === 0) return res.status(404).json({ message: 'Пользователь не найден' });
     res.json(user[0]);
   } catch (err) {
     console.error('❌ Ошибка при получении профиля:', err);
@@ -186,26 +253,25 @@ app.get('/api/profile', authenticate, async (req, res) => {
 
 app.put('/api/profile', authenticate, async (req, res) => {
   const { full_name, email, bio, website } = req.body;
-
+  if (!full_name || !email) {
+    return res.status(400).json({ message: 'Имя и email обязательны' });
+  }
   try {
     const connection = await pool.getConnection();
     await connection.execute(
       'UPDATE users SET full_name = ?, email = ?, bio = ?, profile_image = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [full_name, email, bio, website, req.user.userId]
+      [full_name, email, bio || null, website || null, req.user.userId]
     );
     connection.release();
-
     res.json({ message: 'Профиль успешно обновлён' });
   } catch (err) {
-    console.error('Ошибка при обновлении профиля:', err);
+    console.error('❌ Ошибка при обновлении профиля:', err);
     res.status(500).json({ message: 'Ошибка сервера' });
   }
 });
 
-
 app.post('/api/profile/avatar', authenticate, upload.single('avatar'), async (req, res) => {
   const imagePath = `/uploads/${req.file.filename}`;
-
   try {
     const connection = await pool.getConnection();
     await connection.execute(
@@ -213,7 +279,6 @@ app.post('/api/profile/avatar', authenticate, upload.single('avatar'), async (re
       [imagePath, req.user.userId]
     );
     connection.release();
-
     res.json({ imageUrl: imagePath });
   } catch (err) {
     console.error('Ошибка загрузки аватарки:', err);
@@ -221,9 +286,8 @@ app.post('/api/profile/avatar', authenticate, upload.single('avatar'), async (re
   }
 });
 
-// === Роуты для статей ===
-
-// 🔹 Создание статьи с поддержкой запланированной публикации
+// --- Статьи ---
+// Создание статьи с поддержкой запланированной публикации
 app.post('/api/articles', async (req, res) => {
   const { title, content, excerpt, cover_image, status, owner_id, tags = [], scheduled_publish_time } = req.body;
 
@@ -279,11 +343,20 @@ app.post('/api/articles', async (req, res) => {
   }
 });
 
-// 🔹 Получение всех статей
+// Получение всех статей конкретного автора (owner_id)
 app.get('/api/articles', async (req, res) => {
+  const { ownerId } = req.query;
+
+  if (!ownerId) {
+    return res.status(400).json({ message: 'Не передан ownerId' });
+  }
+
   try {
     const connection = await pool.getConnection();
-    const [articles] = await connection.execute('SELECT * FROM articles');
+    const [articles] = await connection.execute(
+      'SELECT * FROM articles WHERE owner_id = ?',
+      [ownerId]
+    );
     connection.release();
     return res.json(articles);
   } catch (err) {
@@ -292,7 +365,8 @@ app.get('/api/articles', async (req, res) => {
   }
 });
 
-// 🔹 Получение статьи по ID
+
+// Получение статьи по ID
 app.get('/api/articles/:id', async (req, res) => {
   const { id } = req.params;
 
@@ -316,8 +390,7 @@ app.get('/api/articles/:id', async (req, res) => {
   }
 });
 
-// 🔹 Обновление статьи
-// === 🔄 Функция для проверки и публикации запланированных статей ===
+// Функция для проверки и публикации запланированных статей
 async function publishScheduledArticles() {
   try {
     const connection = await pool.getConnection();
@@ -345,7 +418,7 @@ async function publishScheduledArticles() {
 // Проверяем и публикуем запланированные статьи каждую минуту
 setInterval(publishScheduledArticles, 60000);
 
-// 🔹 Обновление статьи
+// Обновление статьи
 app.put('/api/articles/:id', async (req, res) => {
   const { id } = req.params;
   const { title, content, excerpt, cover_image, status, tags = [], scheduled_publish_time } = req.body;
@@ -404,7 +477,7 @@ app.put('/api/articles/:id', async (req, res) => {
   }
 });
 
-// 🔹 Получение статьи для публичного просмотра по ID
+// Получение статьи для публичного просмотра по ID
 app.get('/shared-article/:id', async (req, res) => {
   const { id } = req.params;
 
@@ -428,7 +501,7 @@ app.get('/shared-article/:id', async (req, res) => {
   }
 });
 
-// 🔹 Получение всех тегов
+// Получение всех тегов
 app.get('/api/tags', async (req, res) => {
   try {
     const connection = await pool.getConnection();
@@ -441,10 +514,6 @@ app.get('/api/tags', async (req, res) => {
   }
 });
 
-
-const { v4: uuidv4 } = require('uuid'); // Добавьте эту зависимость: npm install uuid
-
-// 🔗 Создание ссылки для доступа к статье
 // Создание ссылки для доступа к статье
 app.post('/api/articles/:id/share', async (req, res) => {
   const { id } = req.params;
@@ -515,8 +584,7 @@ app.post('/api/articles/:id/share', async (req, res) => {
   }
 });
 
-
-// 🔗 Проверка действительности ссылки для доступа и получение данных статьи
+// Проверка действительности ссылки для доступа и получение данных статьи
 app.get('/api/articles/share/:shareId', async (req, res) => {
   const { shareId } = req.params;
 
@@ -563,7 +631,7 @@ app.get('/api/articles/share/:shareId', async (req, res) => {
   }
 });
 
-// 🔹 Обновление статьи через ссылку общего доступа
+// Обновление статьи через ссылку общего доступа
 app.put('/api/articles/:id/shared/:shareId', async (req, res) => {
   const { id, shareId } = req.params;
   const { title, content, tags = [] } = req.body;
@@ -624,8 +692,48 @@ app.put('/api/articles/:id/shared/:shareId', async (req, res) => {
   }
 });
 
+app.get('/ideas', async (req, res) => {
+  try {
+    const [ideas] = await pool.query(`
+      SELECT i.*, 
+             COALESCE(SUM(CASE WHEN iv.vote_type = 'upvote' THEN 1 ELSE 0 END), 0) AS votes
+      FROM ideas i
+      LEFT JOIN idea_votes iv ON i.id = iv.idea_id
+      WHERE i.status = "open"
+      GROUP BY i.id
+      ORDER BY votes DESC
+    `);
+    res.json(ideas);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка при получении идей' });
+  }
+});
+
+app.post('/ideas', async (req, res) => {
+  const { title, description, user_id } = req.body;
+  if (!title || !description || !user_id) {
+    return res.status(400).json({ message: 'Заголовок, описание и пользователь обязательны' });
+  }
+  try {
+    // Проверяем, существует ли пользователь
+    const [user] = await pool.query('SELECT id FROM users WHERE id = ?', [user_id]);
+    if (user.length === 0) {
+      return res.status(400).json({ message: 'Пользователь не найден' });
+    }
+    const [result] = await pool.query(
+      'INSERT INTO ideas (title, description, user_id, status) VALUES (?, ?, ?, "open")',
+      [title, description, user_id]
+    );
+    res.status(201).json({ message: 'Идея успешно добавлена', ideaId: result.insertId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка при добавлении идеи' });
+  }
+});
+
 // === 🚀 Запуск сервера ===
 const PORT = process.env.PORT || 5000;
-server.listen(5000, () => {
-  console.log('🚀 Сервер запущен на http://localhost:5000');
+server.listen(PORT, () => {
+  console.log(`🚀 Сервер запущен на http://localhost:${PORT}`);
 });
