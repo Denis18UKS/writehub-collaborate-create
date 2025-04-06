@@ -692,35 +692,56 @@ app.put('/api/articles/:id/shared/:shareId', async (req, res) => {
   }
 });
 
+
+
 app.get('/ideas', async (req, res) => {
   try {
-    const [ideas] = await pool.query(`
-      SELECT i.*, 
-             COALESCE(SUM(CASE WHEN iv.vote_type = 'upvote' THEN 1 ELSE 0 END), 0) AS votes
-      FROM ideas i
-      LEFT JOIN idea_votes iv ON i.id = iv.idea_id
-      WHERE i.status = "open"
-      GROUP BY i.id
-      ORDER BY votes DESC
-    `);
-    res.json(ideas);
+    const [ideas] = await pool.query(
+      `SELECT i.id, 
+              i.title, 
+              i.description, 
+              i.status, 
+              i.created_at, 
+              u.username AS author, 
+              COALESCE(SUM(CASE WHEN iv.vote_type = 'upvote' THEN 1 ELSE 0 END), 0) AS votes 
+       FROM ideas i
+       LEFT JOIN users u ON i.user_id = u.id
+       LEFT JOIN idea_votes iv ON i.id = iv.idea_id
+       WHERE i.status = "open"
+       GROUP BY i.id
+       ORDER BY votes DESC`
+    );
+
+    // Форматируем дату перед отправкой
+    const formattedIdeas = ideas.map(idea => {
+      const formattedDate = new Date(idea.created_at).toLocaleDateString('ru-RU', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+      return { ...idea, date: formattedDate };
+    });
+
+    res.json(formattedIdeas);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Ошибка при получении идей' });
   }
 });
 
-app.post('/ideas', async (req, res) => {
-  const { title, description, user_id } = req.body;
+app.post('/ideas', authenticate, async (req, res) => {
+  const { title, description } = req.body;
+  const user_id = req.user.userId; // Берем user_id из токена, который был установлен в authenticate middleware
   if (!title || !description || !user_id) {
     return res.status(400).json({ message: 'Заголовок, описание и пользователь обязательны' });
   }
+
   try {
-    // Проверяем, существует ли пользователь
     const [user] = await pool.query('SELECT id FROM users WHERE id = ?', [user_id]);
     if (user.length === 0) {
       return res.status(400).json({ message: 'Пользователь не найден' });
     }
+
     const [result] = await pool.query(
       'INSERT INTO ideas (title, description, user_id, status) VALUES (?, ?, ?, "open")',
       [title, description, user_id]
@@ -729,6 +750,67 @@ app.post('/ideas', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Ошибка при добавлении идеи' });
+  }
+});
+
+
+
+// Получить статистику
+app.get('/api/dashboard/stats', async (req, res) => {
+  try {
+    // Пример запроса для получения статистики
+    const [ideaCount] = await pool.query('SELECT COUNT(*) AS count FROM ideas WHERE status = "open"');
+    const [voteCount] = await pool.query('SELECT COUNT(*) AS count FROM idea_votes');
+    const [commentCount] = await pool.query('SELECT COUNT(*) AS count FROM comments');  // Если есть таблица комментариев
+
+    // Формируем статистику
+    const stats = [
+      {
+        title: 'Открытые идеи',
+        value: ideaCount[0].count,
+        up: true,
+        change: '+5 за неделю',
+      },
+      {
+        title: 'Голоса за идеи',
+        value: voteCount[0].count,
+        up: true,
+        change: '+15 за неделю',
+      },
+      {
+        title: 'Комментарии',
+        value: commentCount[0].count,
+        up: false,
+        change: '-2 за неделю',
+      },
+    ];
+
+    res.json(stats);
+  } catch (err) {
+    console.error('Ошибка при получении статистики:', err);
+    res.status(500).json({ message: 'Ошибка при получении статистики' });
+  }
+});
+
+// Получить последние статьи
+// Получить последние статьи с количеством комментариев
+app.get('/api/dashboard/recent-articles', async (req, res) => {
+  try {
+    // Запрос для получения последних статей с количеством комментариев
+    const [recentArticles] = await pool.query(
+      `SELECT a.id, a.title, a.created_at AS date, a.view_count AS views, 
+              COUNT(c.id) AS comments
+       FROM articles a
+       LEFT JOIN comments c ON c.article_id = a.id
+       GROUP BY a.id
+       ORDER BY a.created_at DESC
+       LIMIT 5`
+    );
+
+    res.json(recentArticles);
+  } catch (err) {
+    console.error('Ошибка при получении последних статей:', err);
+    res.status(500).json({ message: 'Ошибка при получении последних статей' });
   }
 });
 

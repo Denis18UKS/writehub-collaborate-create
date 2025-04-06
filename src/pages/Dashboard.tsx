@@ -7,20 +7,31 @@ import { ArrowUp, ArrowDown, FileText, MessageSquare, Eye } from 'lucide-react';
 const Dashboard = () => {
   const navigate = useNavigate();
 
-  // Состояния для статистики и недавних статей
   const [stats, setStats] = useState<any[]>([]);
   const [recentArticles, setRecentArticles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const formatDate = (date: string) => {
+    const options: Intl.DateTimeFormatOptions = {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    };
+
+    const formattedDate = new Date(date).toLocaleString('ru-RU', options);
+    return formattedDate;
+  };
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        // Получаем статистику (пример запроса, эндпоинт можно настроить под свои нужды)
         const statsResponse = await fetch('http://localhost:5000/api/dashboard/stats');
         const statsData = await statsResponse.json();
         setStats(statsData);
 
-        // Получаем недавние статьи
         const articlesResponse = await fetch('http://localhost:5000/api/dashboard/recent-articles');
         const articlesData = await articlesResponse.json();
         setRecentArticles(articlesData);
@@ -79,7 +90,7 @@ const Dashboard = () => {
                     >
                       <div>
                         <h3 className="font-semibold">{article.title}</h3>
-                        <p className="text-sm text-gray-500">{article.date}</p>
+                        <p className="text-sm text-gray-500">{formatDate(article.date)}</p>
                       </div>
                       <div className="flex items-center gap-4 mt-2 sm:mt-0">
                         <div className="flex items-center text-sm text-gray-500">
@@ -103,7 +114,7 @@ const Dashboard = () => {
                 <CardTitle>Быстрые действия</CardTitle>
                 <CardDescription>Часто используемые инструменты</CardDescription>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card
                   className="cursor-pointer hover:bg-gray-50 transition-colors"
                   onClick={() => navigate('/dashboard/articles/new')}
@@ -121,16 +132,6 @@ const Dashboard = () => {
                   <CardContent className="flex flex-col items-center justify-center py-6">
                     <MessageSquare className="h-12 w-12 text-accent-purple mb-4" />
                     <p className="font-semibold">Предложить идею</p>
-                  </CardContent>
-                </Card>
-
-                <Card
-                  className="cursor-pointer hover:bg-gray-50 transition-colors"
-                  onClick={() => navigate('/dashboard/stats')}
-                >
-                  <CardContent className="flex flex-col items-center justify-center py-6">
-                    <Eye className="h-12 w-12 text-accent-purple mb-4" />
-                    <p className="font-semibold">Просмотреть статистику</p>
                   </CardContent>
                 </Card>
               </CardContent>

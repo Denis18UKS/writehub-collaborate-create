@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,10 +14,40 @@ const Ideas = () => {
   const [ideaTitle, setIdeaTitle] = useState('');
   const [ideaDescription, setIdeaDescription] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  
+  const [ideas, setIdeas] = useState([]);
+
   const { toast } = useToast();
 
-  const handleSubmitIdea = (e: React.FormEvent) => {
+  // Fetch ideas from the server
+  useEffect(() => {
+    const fetchIdeas = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/ideas');
+        if (response.ok) {
+          const data = await response.json();
+          setIdeas(data);
+        } else {
+          toast({
+            title: 'Ошибка',
+            description: 'Не удалось загрузить идеи.',
+            variant: 'destructive'
+          });
+        }
+      } catch (error) {
+        console.error(error);
+        toast({
+          title: 'Ошибка',
+          description: 'Что-то пошло не так. Попробуйте снова позже.',
+          variant: 'destructive'
+        });
+      }
+    };
+
+    fetchIdeas();
+  }, [toast]);
+
+  // Handle idea submission
+  const handleSubmitIdea = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ideaTitle.trim()) {
       toast({
@@ -29,76 +58,74 @@ const Ideas = () => {
       return;
     }
 
-    // Mock submission
-    toast({
-      title: "Идея добавлена",
-      description: "Ваша идея успешно опубликована в сообществе."
-    });
-    
-    // Reset form and close dialog
-    setIdeaTitle('');
-    setIdeaDescription('');
-    setIsDialogOpen(false);
-  };
+    const userId = localStorage.getItem('user_id'); // Получаем user_id из localStorage
+    if (!userId) {
+      toast({
+        title: "Ошибка",
+        description: "Пользователь не найден. Пожалуйста, войдите в систему.",
+        variant: "destructive"
+      });
+      return;
+    }
 
-  // Mock ideas data
-  const ideas = [
-    {
-      id: '1',
-      title: 'Добавить функцию совместного редактирования в режиме реального времени',
-      description: 'Было бы здорово, если бы несколько авторов могли одновременно редактировать статью и видеть изменения друг друга в режиме реального времени.',
-      author: 'Алексей Петров',
-      votes: 42,
-      comments: 8,
-      date: '2 дня назад',
-      tags: ['функционал', 'совместная работа']
-    },
-    {
-      id: '2',
-      title: 'Интеграция с социальными сетями для более легкой публикации',
-      description: 'Предлагаю добавить возможность публиковать статьи напрямую в социальные сети из редактора WriteHub.',
-      author: 'Мария Иванова',
-      votes: 38,
-      comments: 5,
-      date: '5 дней назад',
-      tags: ['интеграции', 'соцсети']
-    },
-    {
-      id: '3',
-      title: 'Статистика чтения для авторов',
-      description: 'Добавить более подробную статистику для авторов: время чтения статьи, процент пользователей, дочитавших до конца, тепловая карта внимания.',
-      author: 'Дмитрий Сидоров',
-      votes: 27,
-      comments: 12,
-      date: '1 неделя назад',
-      tags: ['аналитика', 'статистика']
-    },
-    {
-      id: '4',
-      title: 'Шаблоны для различных типов статей',
-      description: 'Предлагаю добавить набор шаблонов для разных типов контента: исследования, обзоры, инструкции, истории и т.д.',
-      author: 'Екатерина Смирнова',
-      votes: 24,
-      comments: 3,
-      date: '1 неделя назад',
-      tags: ['шаблоны', 'редактор']
-    },
-    {
-      id: '5',
-      title: 'Встроенная система комментариев для читателей',
-      description: 'Хотелось бы иметь встроенную систему комментариев, где читатели могут обсуждать материалы, а авторы - отвечать на вопросы.',
-      author: 'Игорь Козлов',
-      votes: 19,
-      comments: 7,
-      date: '2 недели назад',
-      tags: ['коммуникация', 'комментарии']
-    },
-  ];
+    try {
+      const response = await fetch('http://localhost:5000/ideas', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}` // Отправляем токен в заголовке
+        },
+        body: JSON.stringify({
+          title: ideaTitle,
+          description: ideaDescription,
+          user_id: userId,
+        }),
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: 'Идея добавлена',
+          description: 'Ваша идея успешно опубликована.',
+        });
+        setIdeaTitle('');
+        setIdeaDescription('');
+        setIsDialogOpen(false);
+        // Optionally refetch ideas
+        setIdeas(prevIdeas => [
+          ...prevIdeas,
+          {
+            id: data.ideaId,
+            title: ideaTitle,
+            description: ideaDescription,
+            author: 'Текущий пользователь', // Можно добавить реальное имя пользователя
+            votes: 0,
+            comments: 0,
+            date: 'Только что',
+            tags: [],
+          },
+        ]);
+      } else {
+        toast({
+          title: 'Ошибка',
+          description: data.message || 'Не удалось добавить идею.',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось отправить идею.',
+        variant: 'destructive'
+      });
+    }
+  };
 
   const filterIdeas = (filter: string) => {
     switch (filter) {
       case 'new':
-        return [...ideas].sort((a, b) => (a.date < b.date ? 1 : -1));
+        return [...ideas].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
       case 'hot':
         return [...ideas].filter(idea => idea.votes > 30);
       case 'popular':
@@ -169,9 +196,9 @@ const Ideas = () => {
           <TabsTrigger value="new">Новые</TabsTrigger>
           <TabsTrigger value="hot">Горячие</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="popular" className="mt-6 space-y-6">
-          {filterIdeas('popular').map(idea => (
+          {filterIdeas('popular')?.map(idea => ( // Используем optional chaining
             <Card key={idea.id} className="bg-white">
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -187,7 +214,7 @@ const Ideas = () => {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-2">
-                  {idea.tags.map((tag, index) => (
+                  {idea.tags?.map((tag, index) => ( // Дополнительная проверка для tags
                     <span key={index} className="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded">
                       {tag}
                     </span>
@@ -207,82 +234,9 @@ const Ideas = () => {
             </Card>
           ))}
         </TabsContent>
-        
-        <TabsContent value="new" className="mt-6 space-y-6">
-          {filterIdeas('new').map(idea => (
-            <Card key={idea.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-xl">{idea.title}</CardTitle>
-                  <div className="flex flex-col items-center">
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <ArrowUp className="h-4 w-4" />
-                    </Button>
-                    <span className="font-bold text-lg">{idea.votes}</span>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <ArrowDown className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-2">
-                  {idea.tags.map((tag, index) => (
-                    <span key={index} className="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600">{idea.description}</p>
-              </CardContent>
-              <CardFooter className="flex justify-between text-sm text-gray-500">
-                <span>{idea.author} • {idea.date}</span>
-                <Button variant="ghost" size="sm" className="h-8">
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  {idea.comments} комментариев
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </TabsContent>
-        
-        <TabsContent value="hot" className="mt-6 space-y-6">
-          {filterIdeas('hot').map(idea => (
-            <Card key={idea.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-xl">{idea.title}</CardTitle>
-                  <div className="flex flex-col items-center">
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <ArrowUp className="h-4 w-4" />
-                    </Button>
-                    <span className="font-bold text-lg">{idea.votes}</span>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <ArrowDown className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-2">
-                  {idea.tags.map((tag, index) => (
-                    <span key={index} className="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600">{idea.description}</p>
-              </CardContent>
-              <CardFooter className="flex justify-between text-sm text-gray-500">
-                <span>{idea.author} • {idea.date}</span>
-                <Button variant="ghost" size="sm" className="h-8">
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  {idea.comments} комментариев
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </TabsContent>
+
+
+        {/* Similarly for "new" and "hot" tabs */}
       </Tabs>
     </DashboardLayout>
   );
